@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Salesforce Chat (Mejorado con Voz y Toggle)</title>
+  <style>
+    /* Estilos generales y específicos */
+    body {
+      margin: 0;
+      padding: 20px;
+      font-family: Arial, sans-serif;
+      color: #333;
+      background-color: #fff;
+    }
+    h2 {
+      margin: 0 0 20px 0;
+      text-align: center;
+      color: #1798c1;
+      font-weight: 600;
+    }
+    #chatbox {
+      width: 100%;
+      height: 400px;
+      background: #f9f9f9;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      overflow-y: auto;
+      padding: 10px;
+      margin-bottom: 10px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    #controls {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      align-items: center;
+      margin-bottom: 10px;
+      gap: 6px;
+    }
+    #userInput {
+      width: 60%;
+      padding: 8px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      outline: none;
+      font-size: 14px;
+    }
+    button {
+      padding: 8px 14px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: 500;
+      font-size: 14px;
+      transition: background 0.3s;
+    }
+    button.primary {
+      background-color: #1798c1;
+      color: #fff;
+    }
+    button.primary:hover {
+      background-color: #0f6d8c;
+    }
+    button.secondary {
+      background-color: #999;
+      color: #fff;
+    }
+    button.secondary:hover {
+      background-color: #666;
+    }
+    button.mic-button {
+      background-color: grey;
+      border: none;
+      border-radius: 50%;
+      padding: 10px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background-color 0.3s;
+    }
+    button.mic-button.active {
+      background-color: red;
+    }
+    button.mic-button svg {
+      width: 20px;
+      height: 20px;
+      fill: white;
+    }
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 50px;
+      height: 24px;
+    }
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: #ccc;
+      transition: .4s;
+      border-radius: 24px;
+    }
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 18px;
+      width: 18px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: .4s;
+      border-radius: 50%;
+    }
+    input:checked + .slider {
+      background-color: #1798c1;
+    }
+    input:checked + .slider:before {
+      transform: translateX(26px);
+    }
+    .userMsgContainer, .botMsgContainer {
+      display: flex;
+      align-items: flex-start;
+      margin: 8px 0;
+    }
+    .userMsgContainer {
+      justify-content: flex-end;
+    }
+    .botMsgContainer {
+      justify-content: flex-start;
+    }
+    .userMsgBubble, .botMsgBubble {
+      max-width: 60%;
+      border: 1px solid #dcdcdc;
+      border-radius: 6px;
+      padding: 10px;
+      margin: 0 6px;
+      font-size: 14px;
+    }
+    .userMsgBubble {
+      background: #fff;
+    }
+    .botMsgBubble {
+      background: #edf8fa;
+    }
+    .userImg, .botImg {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+    }
+    .userImg {
+      margin-left: 6px;
+    }
+    .botImg {
+      margin-right: 6px;
+    }
+    .infoMsg {
+      color: #666;
+      font-style: italic;
+      font-size: 14px;
+      text-align: center;
+      margin: 8px 0;
+      width: 100%;
+    }
+    #voiceToggleLabel {
+      font-size: 14px;
+      margin-left: 8px;
+    }
+  </style>
+</head>
+<body>
+  <h2>Salesforce Chat</h2>
+  <div id="chatbox"></div>
+
+  <div id="controls">
+    <input type="text" id="userInput" placeholder="Escribe un mensaje..." />
+    <button class="primary" onclick="sendMessage()">Enviar</button>
+    <button class="secondary" onclick="endSession()">Finalizar Chat</button>
+    <button id="dictationBtn" class="mic-button" onclick="toggleDictation()">
+      <svg viewBox="0 0 24 24">
+        <path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3z"></path>
+        <path d="M19 10v1a7 7 0 0 1-14 0v-1"></path>
+        <line x1="12" y1="19" x2="12" y2="23"></line>
+        <line x1="8" y1="23" x2="16" y2="23"></line>
+      </svg>
+    </button>
+    <label class="switch">
+      <input type="checkbox" id="toggleVoice" onchange="toggleVoiceResponse(this)" checked>
+      <span class="slider"></span>
+    </label>
+    <span id="voiceToggleLabel">Leer respuesta en voz</span>
+  </div>
+
+  <script>
+    /*************************************************
+     * CONFIGURACIÓN DEL FRONTEND
+     *************************************************/
+    // URL dinámica para entornos de desarrollo y producción
+    const serverUrl = window.location.origin;
+    let sessionId = "";
+
+    // Nombres y URLs de imágenes
+    const userName = "Tú";
+    const botName = "Salesforce Bot";
+    const userImageUrl = "https://cdn-icons-png.flaticon.com/512/847/847969.png";
+    const botImageUrl = "https://wp.salesforce.com/en-us/wp-content/uploads/sites/4/2024/09/img-agent-1.webp";
+
+    // Control para la lectura en voz de la respuesta
+    let enableVoiceResponse = true;
+
+    // Variables para dictado de voz
+    let recognition = null;
+    let isDictating = false;
+
+    /*************************************************
+     * FUNCIONES AUXILIARES
+     *************************************************/
+    function formatBotResponse(text) {
+      let formatted = text.replace(/((http|https):\/\/[^\s]+)/g, '<a href="$1" target="_blank">$1</a>');
+      formatted = formatted.replace(/\n/g, '<br/>');
+      return formatted;
+    }
+
+    function toggleDictation() {
+      if (!('SpeechRecognition' in window) && !('webkitSpeechRecognition' in window)) {
+        alert("El reconocimiento de voz no es soportado por tu navegador.");
+        return;
+      }
+
+      if (!isDictating) {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        recognition = new SpeechRecognition();
+        recognition.lang = 'es-ES';
+        recognition.start();
+        isDictating = true;
+        document.getElementById("dictationBtn").classList.add("active");
+
+        recognition.onresult = function(event) {
+          const transcript = event.results[0][0].transcript;
+          document.getElementById("userInput").value = transcript;
+        };
+
+        recognition.onerror = function(event) {
+          console.error("Error en el reconocimiento de voz:", event.error);
+        };
+
+        recognition.onend = function() {
+          isDictating = false;
+          document.getElementById("dictationBtn").classList.remove("active");
+        };
+      } else {
+        recognition.stop();
+        isDictating = false;
+        document.getElementById("dictationBtn").classList.remove("active");
+      }
+    }
+
+    function toggleVoiceResponse(checkbox) {
+      enableVoiceResponse = checkbox.checked;
+    }
+
+    /*************************************************
+     * CICLO DE VIDA DEL CHAT
+     *************************************************/
+    window.onload = () => {
+      getAccessToken();
+    };
+
+    async function getAccessToken() {
+      try {
+        const response = await fetch(`${serverUrl}/get-token`, { method: "POST" });
+        const data = await response.json();
+        console.log("Access Token:", data.accessToken);
+        createChatSession();
+      } catch (err) {
+        console.error("Error al obtener el token de acceso:", err);
+        document.getElementById("chatbox").innerHTML +=
+          `<p class='infoMsg'>No se pudo obtener el token de acceso. Revisa la consola para más detalles.</p>`;
+      }
+    }
+
+    async function createChatSession() {
+      try {
+        const response = await fetch(`${serverUrl}/start-session`, { method: "POST" });
+        const data = await response.json();
+        sessionId = data.sessionId;
+        console.log("Session ID:", sessionId);
+        document.getElementById("chatbox").innerHTML +=
+          `<p class='infoMsg'>Sesión creada. ID: ${sessionId}</p>`;
+      } catch (err) {
+        console.error("Error al iniciar la sesión:", err);
+        document.getElementById("chatbox").innerHTML +=
+          `<p class='infoMsg'>No se pudo iniciar la sesión. Revisa la consola para más detalles.</p>`;
+      }
+    }
+
+    async function sendMessage() {
+      const message = document.getElementById("userInput").value.trim();
+      if (!sessionId) {
+        alert("Sesión no inicializada. Intenta de nuevo.");
+        return;
+      }
+      if (!message) return;
+
+      document.getElementById("chatbox").innerHTML += `
+        <div class="userMsgContainer">
+          <div class="userMsgBubble">
+            <strong>${userName}:</strong> ${message}
+          </div>
+          <img class="userImg" src="${userImageUrl}" alt="User Icon" />
+        </div>
+      `;
+      document.getElementById("userInput").value = "";
+      document.getElementById("chatbox").innerHTML +=
+        `<p id="botTyping" class='infoMsg'>Respondiendo...</p>`;
+
+      try {
+        const response = await fetch(`${serverUrl}/send-message`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message })
+        });
+        const data = await response.json();
+        console.log("Respuesta del API:", data);
+
+        const typingElement = document.getElementById("botTyping");
+        if (typingElement) typingElement.remove();
+
+        let botResponse = "No se recibió respuesta del bot.";
+        if (data.messages && data.messages.length > 0 && data.messages[0].message) {
+          botResponse = data.messages[0].message;
+        }
+
+        document.getElementById("chatbox").innerHTML += `
+          <div class="botMsgContainer">
+            <img class="botImg" src="${botImageUrl}" alt="Bot Icon" />
+            <div class="botMsgBubble">
+              <strong>${botName}:</strong> ${formatBotResponse(botResponse)}
+            </div>
+          </div>
+        `;
+
+        if (enableVoiceResponse) {
+          fetch(`${serverUrl}/synthesize`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text: botResponse })
+          })
+          .then(response => response.blob())
+          .then(blob => {
+            const audioURL = URL.createObjectURL(blob);
+            const audio = new Audio(audioURL);
+            audio.play();
+          })
+          .catch(error => {
+            console.error("Error en el servicio TTS:", error);
+          });
+        }
+      } catch (error) {
+        console.error("Error al enviar el mensaje:", error);
+        const typingElement = document.getElementById("botTyping");
+        if (typingElement) typingElement.remove();
+        document.getElementById("chatbox").innerHTML += `
+          <div class="botMsgContainer">
+            <img class="botImg" src="${botImageUrl}" alt="Bot Icon" />
+            <div class="botMsgBubble">
+              <strong>${botName}:</strong> <em>Error: no se pudo obtener respuesta.</em>
+            </div>
+          </div>
+        `;
+      }
+    }
+
+    async function endSession() {
+      if (!sessionId) {
+        alert("No hay sesión activa.");
+        return;
+      }
+      try {
+        await fetch(`${serverUrl}/end-session`, { method: "DELETE" });
+        document.getElementById("chatbox").innerHTML +=
+          `<p class='infoMsg'><strong>Sesión finalizada.</strong></p>`;
+        sessionId = "";
+      } catch (error) {
+        console.error("Error al finalizar la sesión:", error);
+        document.getElementById("chatbox").innerHTML +=
+          `<p class='infoMsg'>Error: no se pudo finalizar la sesión correctamente.</p>`;
+      }
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,30 @@
+{
+  "name": "salesforce-chat-app",
+  "version": "1.0.0",
+  "main": "server.mjs",
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "dev": "nodemon server.mjs"
+  },
+  "engines": {
+    "node": "18.x"
+  },
+  "keywords": [
+    "salesforce",
+    "chat",
+    "heroku"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "aws-sdk": "^2.1692.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "node-fetch": "^3.3.2"
+  },
+  "devDependencies": {
+    "nodemon": "^2.0.22"
+  }
+}

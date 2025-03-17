@@ -18,6 +18,49 @@ app.use(cors());
 // SERVIR ARCHIVOS ESTÁTICOS DESDE LA CARPETA "public"
 app.use(express.static('public'));
 
+// CORS configuración mejorada para permitir solicitudes desde dominios de Salesforce
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Permitir solicitudes sin origen (como aplicaciones móviles o postman)
+    if (!origin) return callback(null, true);
+    
+    // Permitir dominios específicos
+    const allowedOrigins = [
+      // Orígenes de desarrollo
+      'http://localhost:3000',
+      'http://localhost:8080',
+      // Dominios de Salesforce (wildcards para cubrir todos los dominios de Salesforce)
+      'https://*.lightning.force.com',
+      'https://*.visualforce.com',
+      'https://*.salesforce.com',
+      'https://*.lightning.salesforce.com',
+      'https://*.site.com',
+      'https://*.force.com'
+    ];
+    
+    // Revisar si el origen es un patrón con wildcard
+    const isAllowed = allowedOrigins.some(allowedOrigin => {
+      if (allowedOrigin.includes('*')) {
+        const pattern = allowedOrigin.replace(/\*/g, '.*');
+        return new RegExp(pattern).test(origin);
+      }
+      return allowedOrigin === origin;
+    });
+    
+    if (isAllowed) {
+      callback(null, true);
+    } else {
+      callback(new Error('Origen no permitido por la política CORS'));
+    }
+  },
+  methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+  credentials: true,
+  optionsSuccessStatus: 204,
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-session-end-reason']
+};
+
+app.use(cors(corsOptions));
+
 // ------------------------------
 // CONFIGURACIÓN DE AWS POLLY
 // ------------------------------

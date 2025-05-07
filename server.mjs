@@ -35,7 +35,8 @@ const corsOptions = {
       'https://*.salesforce.com',
       'https://*.lightning.salesforce.com',
       'https://*.site.com',
-      'https://*.force.com'
+      'https://*.force.com',
+      'https://*zzse-171.dx.commercecloud.salesforce.com'
     ];
     
     // Revisar si el origen es un patrón con wildcard

@@ -105,7 +105,8 @@ app.post('/synthesize', (req, res) => {
 // ------------------------------
 const CLIENT_ID = process.env.CLIENT_ID;
 const CLIENT_SECRET = process.env.CLIENT_SECRET;
-const AI_AGENT_ID = process.env.AI_AGENT_ID; 
+const AI_AGENT_ID = process.env.AI_AGENT_ID;
+const SALESFORCE_INSTANCE = process.env.SALESFORCE_INSTANCE; 
 
 const SALESFORCE_TOKEN_URL = `https://${SALESFORCE_INSTANCE}.my.salesforce.com/services/oauth2/token`;
 const SALESFORCE_CHAT_URL = `https://api.salesforce.com/einstein/ai-agent/v1/agents/${AI_AGENT_ID}/sessions`;

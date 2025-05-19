@@ -146,7 +146,7 @@ app.post('/start-session', async (req, res) => {
       },
       body: JSON.stringify({
         externalSessionKey: "723a2ea4-7789-4e3f-bbd2-ea09f79d69c2",
-        instanceConfig: { endpoint: process.env.SALESFORCE_INSTANCE || "https://storm-92056ec8b1c6ce.my.salesforce.com" },
+        instanceConfig: { endpoint: process.env.SALESFORCE_INSTANCE || "https://${SALESFORCE_INSTANCE}.my.salesforce.com" },
         variables: [],
         streamingCapabilities: { chunkTypes: ["Text"] },
         bypassUser: true

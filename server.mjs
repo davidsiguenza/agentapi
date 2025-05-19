@@ -107,7 +107,7 @@ const CLIENT_ID = process.env.CLIENT_ID;
 const CLIENT_SECRET = process.env.CLIENT_SECRET;
 const AI_AGENT_ID = process.env.AI_AGENT_ID; 
 
-const SALESFORCE_TOKEN_URL = process.env.SALESFORCE_TOKEN_URL || "https://${SALESFORCE_INSTANCE}.my.salesforce.com/services/oauth2/token";
+const SALESFORCE_TOKEN_URL = `https://${SALESFORCE_INSTANCE}.my.salesforce.com/services/oauth2/token`;
 const SALESFORCE_CHAT_URL = `https://api.salesforce.com/einstein/ai-agent/v1/agents/${AI_AGENT_ID}/sessions`;
 
 // Fallback si no está definido:
@@ -146,7 +146,7 @@ app.post('/start-session', async (req, res) => {
       },
       body: JSON.stringify({
         externalSessionKey: "723a2ea4-7789-4e3f-bbd2-ea09f79d69c2",
-        instanceConfig: { endpoint: process.env.SALESFORCE_INSTANCE || "https://${SALESFORCE_INSTANCE}.my.salesforce.com" },
+        instanceConfig: `https://${SALESFORCE_INSTANCE}.my.salesforce.com`,
         variables: [],
         streamingCapabilities: { chunkTypes: ["Text"] },
         bypassUser: true

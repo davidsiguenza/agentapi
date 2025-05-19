@@ -37,6 +37,7 @@ const corsOptions = {
       'https://*.site.com',
       'https://*.force.com',
       'https://*.dx.commercecloud.salesforce.com'
+      'https://*.herokuapp.com'
     ];
     
     // Revisar si el origen es un patrón con wildcard

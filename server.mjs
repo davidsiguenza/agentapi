@@ -36,7 +36,7 @@ const corsOptions = {
       'https://*.lightning.salesforce.com',
       'https://*.site.com',
       'https://*.force.com',
-      'https://*.dx.commercecloud.salesforce.com'
+      'https://*.dx.commercecloud.salesforce.com',
       'https://*.herokuapp.com'
     ];
     

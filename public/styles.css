@@ -18,8 +18,8 @@ body {
 
 /* ========== CONTENEDOR PRINCIPAL ========== */
 #chatContainer {
-  width: 100%;
-  max-width: 480px;
+  width: 98%;
+ /* max-width: 480px; */
   height: 90vh;
   max-height: 700px;
   background: #ffffff;

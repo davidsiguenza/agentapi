@@ -79,6 +79,43 @@ app.post('/get-token', async (req, res) => {
   }
 });
 
+// ========== VALIDAR SESIÓN EXISTENTE ========== 
+app.post('/validate-session', async (req, res) => {
+  try {
+    const { sessionId: testSessionId } = req.body;
+    
+    if (!testSessionId) {
+      return res.status(400).json({ error: 'Session ID is required' });
+    }
+
+    // Intentar hacer una petición simple para verificar si la sesión existe
+    const resp = await fetch(
+      `https://api.salesforce.com/einstein/ai-agent/v1/sessions/${testSessionId}`,
+      {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    if (resp.ok) {
+      // La sesión es válida, actualizar el sessionId global
+      sessionId = testSessionId;
+      console.log('[Server] Sesión validada exitosamente:', testSessionId);
+      res.json({ valid: true, sessionId: testSessionId });
+    } else {
+      console.log('[Server] Sesión inválida:', resp.status, await resp.text());
+      res.status(400).json({ valid: false, error: 'Session not found or expired' });
+    }
+    
+  } catch (err) {
+    console.error('[Server] Error validando sesión:', err);
+    res.status(500).json({ valid: false, error: err.message });
+  }
+});
+
 // ========== INICIAR SESIÓN DE CHAT ========== 
 app.post('/start-session', async (req, res) => {
   try {
@@ -110,6 +147,7 @@ app.post('/start-session', async (req, res) => {
 
     const json = JSON.parse(text);
     sessionId = json.sessionId;
+    console.log('[Server] Nueva sesión creada:', sessionId);
     res.json({ sessionId });
   } catch (err) {
     console.error('start-session exception', err);
@@ -121,6 +159,11 @@ app.post('/start-session', async (req, res) => {
 app.post('/send-message', async (req, res) => {
   try {
     const { message } = req.body;
+    
+    if (!sessionId) {
+      return res.status(400).json({ error: 'No active session. Please start a session first.' });
+    }
+
     const resp = await fetch(
       `https://api.salesforce.com/einstein/ai-agent/v1/sessions/${sessionId}/messages`,
       {
@@ -135,7 +178,25 @@ app.post('/send-message', async (req, res) => {
         })
       }
     );
+    
+    if (!resp.ok) {
+      const errorText = await resp.text();
+      console.error('[Server] Error enviando mensaje:', resp.status, errorText);
+      
+      // Si es un error 404, la sesión probablemente expiró
+      if (resp.status === 404) {
+        sessionId = ""; // Limpiar sessionId
+        return res.status(404).json({ 
+          error: 'Session expired or not found',
+          sessionExpired: true
+        });
+      }
+      
+      return res.status(resp.status).json({ error: errorText });
+    }
+    
     const json = await resp.json();
+    console.log('[Server] Mensaje enviado exitosamente');
     res.json(json);
   } catch (err) {
     console.error('send-message error', err);
@@ -146,7 +207,11 @@ app.post('/send-message', async (req, res) => {
 // ========== FINALIZAR SESIÓN ========== 
 app.delete('/end-session', async (req, res) => {
   try {
-    await fetch(
+    if (!sessionId) {
+      return res.json({ message: 'No active session to end' });
+    }
+
+    const resp = await fetch(
       `https://api.salesforce.com/einstein/ai-agent/v1/sessions/${sessionId}`,
       {
         method: 'DELETE',
@@ -156,10 +221,22 @@ app.delete('/end-session', async (req, res) => {
         }
       }
     );
+
+    const currentSessionId = sessionId;
     sessionId = "";
-    res.json({ message: 'Session ended' });
+    
+    if (resp.ok) {
+      console.log('[Server] Sesión terminada exitosamente:', currentSessionId);
+      res.json({ message: 'Session ended successfully' });
+    } else {
+      const errorText = await resp.text();
+      console.log('[Server] Error terminando sesión (pero limpiando localmente):', resp.status, errorText);
+      // Aún así consideramos que se "terminó" localmente
+      res.json({ message: 'Session ended locally' });
+    }
   } catch (err) {
     console.error('end-session error', err);
+    sessionId = ""; // Limpiar de todas formas
     res.status(500).json({ error: err.message });
   }
 });
@@ -267,6 +344,19 @@ app.post('/synthesize', async (req, res) => {
 // ========== SERVIR ARCHIVOS ESTÁTICOS ========== 
 app.use(express.static(path.join(__dirname, 'public')));
 
+// ========== HEALTH CHECK ========== 
+app.get('/health', (req, res) => {
+  res.json({ 
+    status: 'ok', 
+    timestamp: new Date().toISOString(),
+    hasActiveSession: !!sessionId,
+    sessionId: sessionId || 'none'
+  });
+});
+
 // ========== ARRANCAR SERVIDOR ========== 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+  console.log(`Health check available at: http://localhost:${PORT}/health`);
+});

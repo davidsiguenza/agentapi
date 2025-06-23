@@ -15,6 +15,7 @@
         <span>✍️</span>
         <span>🎤</span>
       </div>
+      <div id="sessionInfo" style="font-size: 12px; color: #888; margin-top: 8px;"></div>
     </div>
     
     <div id="chatbox"></div>
@@ -48,6 +49,12 @@
           </label>
         </div>
         
+        <button class="btn" onclick="clearSession()" title="Clear session" style="background: #ff6b6b;">
+          <svg viewBox="0 0 24 24">
+            <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+          </svg>
+        </button>
+        
         <button class="btn" onclick="endSession()" title="End session">
           <svg viewBox="0 0 24 24">
             <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
@@ -70,12 +77,143 @@
       isDictating: false,
       enableVoiceResponse: false,
       voiceProvider: 'aws',
-      recognition: null
+      recognition: null,
+      conversationHistory: []
+    };
+
+    // ========== STORAGE MANAGEMENT ========== 
+    const StorageManager = {
+      // Claves para localStorage
+      keys: {
+        SESSION_ID: 'salesforce_chat_session_id',
+        SESSION_DATA: 'salesforce_chat_session_data',
+        CONVERSATION: 'salesforce_chat_conversation',
+        SESSION_TIMESTAMP: 'salesforce_chat_timestamp',
+        APP_SETTINGS: 'salesforce_chat_settings'
+      },
+
+      // Guardar sesión activa
+      saveSession(sessionId, sessionData) {
+        try {
+          localStorage.setItem(this.keys.SESSION_ID, sessionId);
+          localStorage.setItem(this.keys.SESSION_DATA, JSON.stringify(sessionData));
+          localStorage.setItem(this.keys.SESSION_TIMESTAMP, Date.now().toString());
+          console.log('[Storage] Sesión guardada:', sessionId);
+        } catch (e) {
+          console.error('[Storage] Error guardando sesión:', e);
+        }
+      },
+
+      // Recuperar sesión guardada
+      getSession() {
+        try {
+          const sessionId = localStorage.getItem(this.keys.SESSION_ID);
+          const sessionDataStr = localStorage.getItem(this.keys.SESSION_DATA);
+          const timestamp = localStorage.getItem(this.keys.SESSION_TIMESTAMP);
+          
+          if (!sessionId || !sessionDataStr || !timestamp) {
+            return null;
+          }
+
+          // Verificar que la sesión no sea muy antigua (24 horas)
+          const sessionAge = Date.now() - parseInt(timestamp);
+          const maxAge = 24 * 60 * 60 * 1000; // 24 horas en ms
+          
+          if (sessionAge > maxAge) {
+            console.log('[Storage] Sesión expirada, limpiando...');
+            this.clearSession();
+            return null;
+          }
+
+          return {
+            sessionId,
+            sessionData: JSON.parse(sessionDataStr),
+            timestamp: parseInt(timestamp)
+          };
+        } catch (e) {
+          console.error('[Storage] Error recuperando sesión:', e);
+          return null;
+        }
+      },
+
+      // Guardar mensaje en el historial
+      saveMessage(message, isUser = true) {
+        try {
+          const conversation = this.getConversation();
+          const newMessage = {
+            id: generateUUID(),
+            text: message,
+            isUser,
+            timestamp: Date.now()
+          };
+          
+          conversation.push(newMessage);
+          localStorage.setItem(this.keys.CONVERSATION, JSON.stringify(conversation));
+          AppState.conversationHistory = conversation;
+          
+          console.log('[Storage] Mensaje guardado:', { isUser, text: message.substring(0, 50) });
+        } catch (e) {
+          console.error('[Storage] Error guardando mensaje:', e);
+        }
+      },
+
+      // Recuperar conversación
+      getConversation() {
+        try {
+          const conversationStr = localStorage.getItem(this.keys.CONVERSATION);
+          if (!conversationStr) return [];
+          
+          const conversation = JSON.parse(conversationStr);
+          return Array.isArray(conversation) ? conversation : [];
+        } catch (e) {
+          console.error('[Storage] Error recuperando conversación:', e);
+          return [];
+        }
+      },
+
+      // Guardar configuraciones de la app
+      saveSettings(settings) {
+        try {
+          localStorage.setItem(this.keys.APP_SETTINGS, JSON.stringify(settings));
+        } catch (e) {
+          console.error('[Storage] Error guardando configuraciones:', e);
+        }
+      },
+
+      // Recuperar configuraciones
+      getSettings() {
+        try {
+          const settingsStr = localStorage.getItem(this.keys.APP_SETTINGS);
+          return settingsStr ? JSON.parse(settingsStr) : {};
+        } catch (e) {
+          console.error('[Storage] Error recuperando configuraciones:', e);
+          return {};
+        }
+      },
+
+      // Limpiar sesión completa
+      clearSession() {
+        try {
+          localStorage.removeItem(this.keys.SESSION_ID);
+          localStorage.removeItem(this.keys.SESSION_DATA);
+          localStorage.removeItem(this.keys.CONVERSATION);
+          localStorage.removeItem(this.keys.SESSION_TIMESTAMP);
+          console.log('[Storage] Sesión limpiada completamente');
+        } catch (e) {
+          console.error('[Storage] Error limpiando sesión:', e);
+        }
+      },
+
+      // Verificar si existe una sesión activa
+      hasActiveSession() {
+        return this.getSession() !== null;
+      }
     };
 
     // ========== INICIALIZACIÓN ========== 
     window.onload = () => {
       setupEventListeners();
+      loadAppSettings();
       initializeApp();
     };
 
@@ -88,10 +226,47 @@
       });
 
       window.addEventListener('message', handleLWCMessage);
+      
+      // Guardar configuraciones cuando cambien
+      document.getElementById('voiceModelSelect').addEventListener('change', saveAppSettings);
+      document.querySelector('input[type="checkbox"]').addEventListener('change', saveAppSettings);
+    }
+
+    function loadAppSettings() {
+      const settings = StorageManager.getSettings();
+      
+      if (settings.voiceProvider) {
+        AppState.voiceProvider = settings.voiceProvider;
+        document.getElementById('voiceModelSelect').value = settings.voiceProvider;
+      }
+      
+      if (settings.enableVoiceResponse !== undefined) {
+        AppState.enableVoiceResponse = settings.enableVoiceResponse;
+        document.querySelector('input[type="checkbox"]').checked = settings.enableVoiceResponse;
+      }
+    }
+
+    function saveAppSettings() {
+      const settings = {
+        voiceProvider: AppState.voiceProvider,
+        enableVoiceResponse: AppState.enableVoiceResponse
+      };
+      StorageManager.saveSettings(settings);
     }
 
     async function initializeApp() {
       try {
+        // Verificar si existe una sesión activa
+        const existingSession = StorageManager.getSession();
+        
+        if (existingSession) {
+          console.log('[Frontend] Sesión existente encontrada:', existingSession.sessionId);
+          await restoreExistingSession(existingSession);
+          return;
+        }
+
+        console.log('[Frontend] No hay sesión existente, iniciando nueva...');
+        
         // Obtener token silenciosamente
         const tokenRes = await fetch(`${window.location.origin}/get-token`, { method: 'POST' });
         if (tokenRes.ok) {
@@ -99,8 +274,7 @@
           console.log('[Frontend] Token obtenido exitosamente');
         }
 
-        // NO crear datos de sesión por defecto aún
-        // Esperar 3 segundos para recibir datos del LWC
+        // Esperar datos del LWC o usar valores por defecto
         setTimeout(() => {
           if (!AppState.sessionData) {
             console.log('[Frontend] No se recibieron datos del LWC, usando valores por defecto');
@@ -110,7 +284,6 @@
             };
           }
           
-          // Solo iniciar sesión si no se ha iniciado ya
           if (!AppState.sessionStarted) {
             createChatSession();
           }
@@ -119,6 +292,85 @@
       } catch (err) {
         console.error('Initialization error:', err);
       }
+    }
+
+    async function restoreExistingSession(existingSession) {
+      try {
+        // Verificar que la sesión siga siendo válida en Salesforce
+        const isValid = await validateSession(existingSession.sessionId);
+        
+        if (!isValid) {
+          console.log('[Frontend] Sesión inválida en Salesforce, limpiando y creando nueva...');
+          StorageManager.clearSession();
+          clearChatUI();
+          initializeApp();
+          return;
+        }
+
+        // Restaurar estado de la aplicación
+        AppState.sessionId = existingSession.sessionId;
+        AppState.sessionData = existingSession.sessionData;
+        AppState.sessionStarted = true;
+        AppState.tokenReady = true;
+
+        // Restaurar conversación
+        AppState.conversationHistory = StorageManager.getConversation();
+        restoreConversationUI();
+
+        // Mostrar información de sesión restaurada
+        updateSessionInfo(`Sesión restaurada (${formatTimestamp(existingSession.timestamp)})`);
+        
+        console.log('[Frontend] Sesión restaurada exitosamente');
+        
+      } catch (err) {
+        console.error('[Frontend] Error restaurando sesión:', err);
+        StorageManager.clearSession();
+        clearChatUI();
+        initializeApp();
+      }
+    }
+
+    async function validateSession(sessionId) {
+      try {
+        // Obtener token primero
+        const tokenRes = await fetch(`${window.location.origin}/get-token`, { method: 'POST' });
+        if (!tokenRes.ok) return false;
+
+        // Intentar enviar un mensaje de prueba para validar la sesión
+        const testRes = await fetch(`${window.location.origin}/validate-session`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId })
+        });
+
+        return testRes.ok;
+      } catch (err) {
+        console.error('[Frontend] Error validando sesión:', err);
+        return false;
+      }
+    }
+
+    function restoreConversationUI() {
+      const chatbox = document.getElementById('chatbox');
+      chatbox.innerHTML = '';
+
+      if (AppState.conversationHistory.length === 0) {
+        return;
+      }
+
+      // Mostrar mensaje de restauración
+      addInfoMessage('Conversación restaurada');
+
+      // Restaurar todos los mensajes
+      AppState.conversationHistory.forEach(msg => {
+        if (msg.isUser) {
+          addUserMessageToUI(msg.text, false); // false = no guardar de nuevo
+        } else {
+          addBotMessageToUI(msg.text, false); // false = no guardar de nuevo
+        }
+      });
+
+      scrollToBottom();
     }
 
     function handleLWCMessage(event) {
@@ -142,7 +394,6 @@
         
         console.log('[Frontend] SessionData actualizado:', AppState.sessionData);
         
-        // Si ya tenemos token y no hemos iniciado sesión, iniciar ahora
         if (AppState.tokenReady && !AppState.sessionStarted) {
           console.log('[Frontend] Iniciando sesión con datos del LWC');
           createChatSession();
@@ -200,6 +451,11 @@
           const data = await res.json();
           AppState.sessionId = data.sessionId;
           AppState.sessionStarted = true;
+          
+          // Guardar nueva sesión
+          StorageManager.saveSession(AppState.sessionId, AppState.sessionData);
+          updateSessionInfo('Nueva sesión iniciada');
+          
           console.log('[Frontend] Sesión iniciada exitosamente:', AppState.sessionId);
         } else {
           const errorText = await res.text();
@@ -250,17 +506,36 @@
       }
     }
 
+    function clearSession() {
+      if (confirm('¿Estás seguro de que quieres limpiar la sesión actual? Esto eliminará todo el historial de conversación.')) {
+        StorageManager.clearSession();
+        AppState.sessionId = null;
+        AppState.sessionStarted = false;
+        AppState.conversationHistory = [];
+        
+        clearChatUI();
+        updateSessionInfo('');
+        
+        // Reinicializar
+        initializeApp();
+      }
+    }
+
     async function endSession() {
       try {
         if (AppState.sessionId) {
           await fetch(`${window.location.origin}/end-session`, { method: 'DELETE' });
+          
+          // Limpiar storage y estado
+          StorageManager.clearSession();
           AppState.sessionId = null;
           AppState.sessionStarted = false;
+          AppState.conversationHistory = [];
           
-          // Clear chat
-          document.getElementById('chatbox').innerHTML = '';
+          clearChatUI();
+          updateSessionInfo('');
           
-          // Reinitialize
+          // Reinicializar
           initializeApp();
         }
       } catch (err) {
@@ -270,23 +545,63 @@
 
     // ========== UI HELPERS ========== 
     function addUserMessage(message) {
+      addUserMessageToUI(message, true);
+    }
+
+    function addBotMessage(message) {
+      addBotMessageToUI(message, true);
+    }
+
+    function addUserMessageToUI(message, save = true) {
       const chatbox = document.getElementById('chatbox');
       chatbox.innerHTML += `
         <div class="userMsgContainer">
           <div class="userMsgBubble">${message}</div>
           <img class="userImg" src="https://cdn-icons-png.flaticon.com/512/847/847969.png" alt="User"/>
         </div>`;
+      
+      if (save) {
+        StorageManager.saveMessage(message, true);
+      }
       scrollToBottom();
     }
 
-    function addBotMessage(message) {
+    function addBotMessageToUI(message, save = true) {
       const chatbox = document.getElementById('chatbox');
       chatbox.innerHTML += `
         <div class="botMsgContainer">
           <img class="botImg" src="https://cdn.vidyard.com/hubs/logos/8c927ef7-fa75-465f-a690-5a7b9a154af9.png" alt="Assistant"/>
           <div class="botMsgBubble">${formatBotResponse(message)}</div>
         </div>`;
+      
+      if (save) {
+        StorageManager.saveMessage(message, false);
+      }
       scrollToBottom();
+    }
+
+    function addInfoMessage(message) {
+      const chatbox = document.getElementById('chatbox');
+      chatbox.innerHTML += `<div class="infoMsg">${message}</div>`;
+      scrollToBottom();
+    }
+
+    function clearChatUI() {
+      document.getElementById('chatbox').innerHTML = '';
+    }
+
+    function updateSessionInfo(text) {
+      document.getElementById('sessionInfo').textContent = text;
+    }
+
+    function formatTimestamp(timestamp) {
+      const date = new Date(timestamp);
+      return date.toLocaleString('es-ES', {
+        day: '2-digit',
+        month: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
     }
 
     function showTypingIndicator() {
@@ -322,14 +637,38 @@
     }
 
     function formatBotResponse(text) {
-      return text
-        .replace(/((http|https):\/\/[^\s]+)/g, '<a href="$1" target="_blank" style="color: #007aff;">$1</a>')
-        .replace(/\n/g, '<br/>');
+      // Primero reemplazar saltos de línea
+      let formattedText = text.replace(/\n/g, '<br/>');
+      
+      // Proteger URLs que están dentro de atributos HTML (src, href, etc.)
+      // Marcamos temporalmente estas URLs para no convertirlas
+      const protectedUrls = [];
+      let urlIndex = 0;
+      
+      // Buscar y marcar URLs dentro de atributos
+      formattedText = formattedText.replace(/(src|href|data-[a-z-]+)\s*=\s*["']([^"']*https?:\/\/[^"']*)["']/gi, (match, attr, url) => {
+        const placeholder = `__PROTECTED_URL_${urlIndex}__`;
+        protectedUrls[urlIndex] = match;
+        urlIndex++;
+        return placeholder;
+      });
+      
+      // Ahora convertir URLs sueltas a enlaces
+      formattedText = formattedText.replace(/(https?:\/\/[^\s<>"']+)/g, 
+        '<a href="$1" target="_blank" style="color: #007aff;">$1</a>');
+      
+      // Restaurar las URLs protegidas
+      protectedUrls.forEach((originalMatch, index) => {
+        formattedText = formattedText.replace(`__PROTECTED_URL_${index}__`, originalMatch);
+      });
+      
+      return formattedText;
     }
 
     // ========== VOICE FUNCTIONALITY ========== 
     function changeVoiceModel(provider) {
       AppState.voiceProvider = provider;
+      saveAppSettings();
       console.log('Voice provider changed to:', provider);
     }
 
@@ -356,6 +695,7 @@
 
     function toggleVoiceResponse(checkbox) { 
       AppState.enableVoiceResponse = checkbox.checked;
+      saveAppSettings();
     }
 
     // ========== SPEECH RECOGNITION ========== 

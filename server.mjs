@@ -31,9 +31,9 @@ let sessionId = "";
 
 // ========== CORS CONFIGURATION ========== 
 const allowedOrigins = [
-  'https://storm-92056ec8b1c6ce.lightning.force.com',
-  'https://storm-92056ec8b1c6ce.my.site.com',
-  'https://salesforce-agent-api-0b27fb87403b.herokuapp.com',
+  'https://*.lightning.force.com',
+  'https://*.my.site.com',
+  'https://*.herokuapp.com',
   'http://localhost:3000',
   'http://localhost:8080',
   'https://*.lightning.force.com',

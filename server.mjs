@@ -123,7 +123,7 @@ app.post('/start-session', async (req, res) => {
 
     const payload = {
       externalSessionKey: externalSessionKey || "",
-      instanceConfig: { endpoint: "https://storm-92056ec8b1c6ce.my.salesforce.com" },
+      instanceConfig: { endpoint: `${SALESFORCE_INSTANCE}` },
       streamingCapabilities: streamingCapabilities || { chunkTypes: ["Text"] }
     };
     if (Array.isArray(variables) && variables.length) payload.variables = variables;
